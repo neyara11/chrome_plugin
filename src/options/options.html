@@ -1,0 +1,99 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Dify ChatBot — Настройки</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Dify ChatBot — Настройки</h1>
+
+    <section class="section">
+      <h2>Приложения</h2>
+      <div id="apps-list" class="list"></div>
+      <button id="add-app-btn" class="btn btn-primary">+ Добавить приложение</button>
+
+      <div id="app-form" class="form" style="display:none">
+        <h3 id="app-form-title">Добавить приложение</h3>
+        <input type="hidden" id="app-id">
+        <div class="field">
+          <label for="app-name">Название</label>
+          <input type="text" id="app-name" placeholder="Бот поддержки">
+        </div>
+        <div class="field">
+          <label for="app-url">URL чат-бота</label>
+          <input type="text" id="app-url" placeholder="https://udify.app/chatbot/xxxxx">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="app-input-var">Переменная для текста</label>
+            <input type="text" id="app-input-var" placeholder="userinput.query" value="userinput.query">
+          </div>
+          <div class="field">
+            <label for="app-url-var">Переменная для URL</label>
+            <input type="text" id="app-url-var" placeholder="page_url" value="page_url">
+          </div>
+        </div>
+        <div class="field">
+          <label for="app-color">Цвет кнопки</label>
+          <input type="color" id="app-color" value="#155EEF">
+        </div>
+        <div class="form-actions">
+          <button id="app-save-btn" class="btn btn-primary">Сохранить</button>
+          <button id="app-cancel-btn" class="btn">Отмена</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Правила сайтов</h2>
+      <div id="sites-list" class="list"></div>
+      <button id="add-site-btn" class="btn btn-primary">+ Добавить правило</button>
+
+      <div id="site-form" class="form" style="display:none">
+        <h3 id="site-form-title">Добавить правило</h3>
+        <input type="hidden" id="site-id">
+        <div class="field">
+          <label for="site-pattern">Шаблон URL</label>
+          <input type="text" id="site-pattern" placeholder="*.example.com или example.com/page">
+          <span class="hint">Используйте * для поддоменов, например *.site1.ru</span>
+        </div>
+        <div class="field">
+          <label for="site-app">Приложение</label>
+          <select id="site-app"></select>
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="site-enabled" checked>
+            Включено
+          </label>
+        </div>
+        <div class="form-actions">
+          <button id="site-save-btn" class="btn btn-primary">Сохранить</button>
+          <button id="site-cancel-btn" class="btn">Отмена</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Глобальные настройки</h2>
+      <div class="field">
+        <label for="default-app">Приложение по умолчанию</label>
+        <select id="default-app">
+          <option value="">— Нет (только на сайтах с правилами) —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="checkbox-label">
+          <input type="checkbox" id="show-all-sites">
+          Показывать на всех сайтах (использует приложение по умолчанию)
+        </label>
+      </div>
+    </section>
+  </div>
+
+  <script src="../lib/storage.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

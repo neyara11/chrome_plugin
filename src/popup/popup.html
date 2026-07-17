@@ -1,0 +1,41 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Dify ChatBot</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h2>Dify ChatBot</h2>
+
+    <div class="field">
+      <label>Текущий сайт:</label>
+      <span id="current-site" class="site-name">—</span>
+    </div>
+
+    <div class="field">
+      <label for="app-select">Приложение:</label>
+      <select id="app-select"></select>
+    </div>
+
+    <div class="field">
+      <label class="checkbox-label">
+        <input type="checkbox" id="enabled-checkbox">
+        Показывать кнопку на этом сайте
+      </label>
+    </div>
+
+    <div id="no-rule-hint" class="hint">Выберите приложение для создания правила сайта или настройте умолчания в Настройках.</div>
+    <div id="new-rule-row" class="hint" style="display:none">Правило будет создано для этого домена после сохранения.</div>
+
+    <div id="status" class="status"></div>
+
+    <button id="options-btn" class="btn-link">Открыть настройки</button>
+  </div>
+
+  <script src="../lib/storage.js"></script>
+  <script src="../lib/url-matcher.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
