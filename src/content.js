@@ -19,6 +19,48 @@
     document.head.appendChild(style);
   }
 
+  function scheduleFillChatInput(iframe, text) {
+    if (iframe._fillTimer) {
+      clearTimeout(iframe._fillTimer);
+      iframe._fillTimer = null;
+    }
+    iframe._fillAttempt = 0;
+    iframe._fillText = text;
+
+    function tryFill() {
+      iframe._fillAttempt++;
+      try {
+        if (fillChatInput(iframe, iframe._fillText)) return;
+      } catch (e) {}
+      if (iframe._fillAttempt < 12) {
+        iframe._fillTimer = setTimeout(tryFill, 800);
+      }
+    }
+
+    iframe.addEventListener('load', function () {
+      setTimeout(tryFill, 1200);
+    }, { once: true });
+  }
+
+  function fillChatInput(iframe, text) {
+    var doc = iframe.contentDocument;
+    if (!doc) return false;
+
+    var textarea = doc.querySelector('textarea');
+    if (!textarea) return false;
+
+    var nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    nativeSetter.call(textarea, text);
+
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+    textarea.focus();
+
+    console.log('[Dify CS] text inserted into chat input:', text.substring(0, 40));
+    return true;
+  }
+
   function createOrShowIframe(app, prefillValue, mode) {
     var existing = iframeMap[app.id];
     var url = app.baseUrl;
@@ -27,6 +69,7 @@
       if (prefillValue) {
         var v1 = mode === 'url' ? (app.urlInputVariable || 'page_url') : (app.inputVariable || 'userinput.query');
         existing.src = buildChatbotUrl(app.baseUrl, v1, prefillValue);
+        scheduleFillChatInput(existing, prefillValue);
       }
       var wrapper = document.getElementById('dify-chatbot-bubble-window');
       if (wrapper) wrapper.setAttribute('data-dify-visible', 'true');
@@ -56,6 +99,10 @@
     iframe.style.cssText = 'border:none;width:100%;height:100%;background-color:#F3F4F6;direction:ltr;';
     wrapper.appendChild(iframe);
     iframeMap[app.id] = iframe;
+
+    if (prefillValue) {
+      scheduleFillChatInput(iframe, prefillValue);
+    }
 
     document.body.appendChild(wrapper);
 
