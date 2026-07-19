@@ -1,4 +1,30 @@
 ﻿(function () {
+  function fillChatInputInFrame(text) {
+    var textarea = document.querySelector('textarea');
+    if (!textarea) return false;
+    var nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+    nativeSetter.call(textarea, text);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    textarea.dispatchEvent(new Event('change', { bubbles: true }));
+    textarea.focus();
+    return true;
+  }
+
+  if (window.self !== window.top) {
+    window.addEventListener('message', function (e) {
+      if (e.data && e.data.type === 'dify-fill-input' && e.data.text) {
+        var attempts = 0;
+        function tryFill() {
+          attempts++;
+          if (fillChatInputInFrame(e.data.text) || attempts > 15) return;
+          setTimeout(tryFill, 600);
+        }
+        tryFill();
+      }
+    });
+    return;
+  }
+
   var iframeMap = {};
   var closeBtnMap = {};
   var currentApp = null;
@@ -32,6 +58,11 @@
       try {
         if (fillChatInput(iframe, iframe._fillText)) return;
       } catch (e) {}
+
+      try {
+        iframe.contentWindow.postMessage({ type: 'dify-fill-input', text: iframe._fillText }, '*');
+      } catch (e) {}
+
       if (iframe._fillAttempt < 12) {
         iframe._fillTimer = setTimeout(tryFill, 800);
       }

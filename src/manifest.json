@@ -11,7 +11,8 @@
   "content_scripts": [{
     "matches": ["<all_urls>"],
     "js": ["lib/storage.js", "lib/url-matcher.js", "lib/dify-url.js", "content.js"],
-    "run_at": "document_idle"
+    "run_at": "document_idle",
+    "all_frames": true
   }],
   "action": {
     "default_popup": "popup/popup.html",
