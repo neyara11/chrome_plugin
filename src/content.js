@@ -47,30 +47,47 @@
     var wrapper = document.createElement('div');
     wrapper.id = 'dify-chatbot-bubble-window';
     wrapper.setAttribute('data-dify-visible', 'true');
-    wrapper.style.cssText = 'position:fixed;bottom:6.7rem;right:1rem;width:min(30rem,calc(100vw - 2rem));height:min(48rem,calc(100vh - 8.5rem));z-index:2147483647;border-radius:0.75rem;box-shadow:rgba(150,150,150,0.2) 0px 10px 30px 0px,rgba(150,150,150,0.2) 0px 0px 0px 1px;overflow:hidden;';
+    wrapper.style.cssText = 'position:fixed;bottom:6.7rem;right:1rem;width:min(30rem,calc(100vw - 2rem));height:min(48rem,calc(100vh - 8.5rem));z-index:2147483647;border-radius:0.75rem;box-shadow:rgba(150,150,150,0.2) 0px 10px 30px 0px,rgba(150,150,150,0.2) 0px 0px 0px 1px;overflow:hidden;resize:both;direction:rtl;min-width:18rem;min-height:22rem;max-width:calc(100vw - 2rem);max-height:calc(100vh - 6.7rem);';
 
     var iframe = document.createElement('iframe');
     iframe.allow = 'fullscreen;microphone';
     iframe.title = 'Dify Chatbot';
     iframe.src = url;
-    iframe.style.cssText = 'border:none;width:100%;height:100%;background-color:#F3F4F6;';
+    iframe.style.cssText = 'border:none;width:100%;height:100%;background-color:#F3F4F6;direction:ltr;';
     wrapper.appendChild(iframe);
     iframeMap[app.id] = iframe;
 
+    document.body.appendChild(wrapper);
+
     var closeBtn = document.createElement('div');
-    closeBtn.style.cssText = 'position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:14px;background:rgba(0,0,0,0.5);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;line-height:1;z-index:1;font-family:Arial,sans-serif;';
+    closeBtn.style.cssText = 'position:fixed;right:14px;width:28px;height:28px;border-radius:14px;background:rgba(0,0,0,0.55);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;line-height:1;z-index:2147483648;font-family:Arial,sans-serif;transition:background 0.15s;';
     closeBtn.textContent = '\u00D7';
     closeBtn.title = 'Закрыть';
+    closeBtn.addEventListener('mouseenter', function () { closeBtn.style.background = 'rgba(0,0,0,0.8)'; });
+    closeBtn.addEventListener('mouseleave', function () { closeBtn.style.background = 'rgba(0,0,0,0.55)'; });
     closeBtn.addEventListener('click', function (e) {
       e.stopPropagation();
       wrapper.setAttribute('data-dify-visible', 'false');
       closeBtn.style.display = 'none';
       if (displayDiv) displayDiv.innerHTML = OPEN_ICON;
     });
-    wrapper.appendChild(closeBtn);
+    document.body.appendChild(closeBtn);
     closeBtnMap[app.id] = closeBtn;
 
-    document.body.appendChild(wrapper);
+    function updateCloseBtnPos() {
+      var rect = wrapper.getBoundingClientRect();
+      closeBtn.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+      closeBtn.style.right = (window.innerWidth - rect.right + 6) + 'px';
+    }
+    updateCloseBtnPos();
+
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(function () { updateCloseBtnPos(); });
+      ro.observe(wrapper);
+    } else {
+      setInterval(updateCloseBtnPos, 500);
+    }
+
     if (displayDiv) displayDiv.innerHTML = CLOSE_ICON;
   }
 
