@@ -2,6 +2,7 @@
   function fillChatInputInFrame(text) {
     var textarea = document.querySelector('textarea');
     if (!textarea) return false;
+    if (textarea.value === text) return true;
     var nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
     nativeSetter.call(textarea, text);
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -59,17 +60,21 @@
         if (fillChatInput(iframe, iframe._fillText)) return;
       } catch (e) {}
 
-      try {
-        iframe.contentWindow.postMessage({ type: 'dify-fill-input', text: iframe._fillText }, '*');
-      } catch (e) {}
+      if (iframe._fillAttempt >= 12) return;
 
-      if (iframe._fillAttempt < 12) {
-        iframe._fillTimer = setTimeout(tryFill, 800);
-      }
+      iframe._fillTimer = setTimeout(tryFill, 800);
     }
 
     iframe.addEventListener('load', function () {
       setTimeout(tryFill, 1200);
+    }, { once: true });
+
+    iframe.addEventListener('load', function () {
+      setTimeout(function () {
+        try {
+          iframe.contentWindow.postMessage({ type: 'dify-fill-input', text: text }, '*');
+        } catch (e) {}
+      }, 3000);
     }, { once: true });
   }
 
