@@ -2,7 +2,10 @@
   function fillChatInputInFrame(text) {
     var textarea = document.querySelector('textarea');
     if (!textarea) return false;
-    if (textarea.value === text) return true;
+    if (textarea.value === text) {
+      console.log('[Dify CS] text already in input, skipping');
+      return true;
+    }
     var nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
     nativeSetter.call(textarea, text);
     textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -53,11 +56,15 @@
     }
     iframe._fillAttempt = 0;
     iframe._fillText = text;
+    iframe._fillDone = false;
 
     function tryFill() {
       iframe._fillAttempt++;
       try {
-        if (fillChatInput(iframe, iframe._fillText)) return;
+        if (fillChatInput(iframe, iframe._fillText)) {
+          iframe._fillDone = true;
+          return;
+        }
       } catch (e) {}
 
       if (iframe._fillAttempt >= 12) return;
@@ -67,13 +74,12 @@
 
     iframe.addEventListener('load', function () {
       setTimeout(tryFill, 1200);
-    }, { once: true });
-
-    iframe.addEventListener('load', function () {
       setTimeout(function () {
-        try {
-          iframe.contentWindow.postMessage({ type: 'dify-fill-input', text: text }, '*');
-        } catch (e) {}
+        if (!iframe._fillDone) {
+          try {
+            iframe.contentWindow.postMessage({ type: 'dify-fill-input', text: text }, '*');
+          } catch (e) {}
+        }
       }, 3000);
     }, { once: true });
   }
@@ -84,6 +90,11 @@
 
     var textarea = doc.querySelector('textarea');
     if (!textarea) return false;
+
+    if (textarea.value === text) {
+      console.log('[Dify CS] text already in input, skipping');
+      return true;
+    }
 
     var nativeSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
     nativeSetter.call(textarea, text);
