@@ -345,3 +345,17 @@
   0%, 80%, 100% { transform: scale(0); }
   40% { transform: scale(1); }
 }
+
+.owui-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 16px;
+  background: #6366f1;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: owuiCursorBlink 0.8s infinite;
+}
+@keyframes owuiCursorBlink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}

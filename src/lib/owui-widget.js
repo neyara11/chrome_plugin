@@ -239,40 +239,77 @@
       chat.title = text.substring(0, 50);
     }
     chat.updatedAt = Date.now();
+    chat.messages.push({ role: 'assistant', content: '' });
     this._saveState();
     this._renderMessages();
 
-    var apiMessages = chat.messages.map(function(m) { return { role: m.role, content: m.content }; });
+    var apiMessages = [];
+    for (var i = 0; i < chat.messages.length - 1; i++) {
+      var m = chat.messages[i];
+      if (m.content !== '') {
+        apiMessages.push({ role: m.role, content: m.content });
+      }
+    }
 
-    chrome.runtime.sendMessage({
-      action: 'owuiProxy',
+    var port = chrome.runtime.connect({ name: 'owui-stream' });
+
+    port.onMessage.addListener(function(msg) {
+      if (msg.chunk) {
+        var updatedChat = self._getActiveChat();
+        if (!updatedChat) return;
+        var lastMsg = updatedChat.messages[updatedChat.messages.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant') {
+          lastMsg.content += msg.chunk;
+          self._saveState();
+          self._renderMessages();
+        }
+      } else if (msg.done) {
+        self._finishStream(port);
+      } else if (msg.error) {
+        var updatedChat = self._getActiveChat();
+        if (updatedChat) {
+          var lastMsg = updatedChat.messages[updatedChat.messages.length - 1];
+          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === '') {
+            updatedChat.messages.pop();
+          }
+          updatedChat.messages.push({ role: 'assistant', content: '⚠️ Ошибка: ' + msg.error });
+          updatedChat.updatedAt = Date.now();
+          addMessageToChat(self.appId, self.hostname, updatedChat.id, 'assistant', '⚠️ Ошибка: ' + msg.error);
+          self._saveState();
+        }
+        self._finishStream(port);
+        self._renderMessages();
+      }
+    });
+
+    port.onDisconnect.addListener(function() {
+      self._finishStream(port);
+    });
+
+    port.postMessage({
+      action: 'owuiStream',
       endpoint: self.endpoint,
       apiKey: self.apiKey,
       model: self.model,
       messages: apiMessages
-    }, function(response) {
-      self.isSending = false;
-      self.sendBtnEl.disabled = false;
-      self.textareaEl.focus();
-
-      var updatedChat = self._getActiveChat();
-      if (!updatedChat) return;
-
-      if (response && response.error) {
-        updatedChat.messages.push({ role: 'assistant', content: '⚠️ Ошибка: ' + response.error });
-      } else if (response && response.choices && response.choices[0]) {
-        var reply = response.choices[0].message.content;
-        updatedChat.messages.push({ role: 'assistant', content: reply });
-      } else {
-        updatedChat.messages.push({ role: 'assistant', content: '⚠️ Неожиданный ответ от сервера' });
-      }
-
-      updatedChat.updatedAt = Date.now();
-      addMessageToChat(self.appId, self.hostname, updatedChat.id, 'assistant',
-        updatedChat.messages[updatedChat.messages.length - 1].content);
-      self._saveState();
-      self._renderMessages();
     });
+  };
+
+  OwuiChatWidget.prototype._finishStream = function(port) {
+    try { port.disconnect(); } catch(e) {}
+    this.isSending = false;
+    this.sendBtnEl.disabled = false;
+    this.textareaEl.focus();
+
+    var chat = this._getActiveChat();
+    if (chat) {
+      var lastMsg = chat.messages[chat.messages.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content) {
+        addMessageToChat(this.appId, this.hostname, chat.id, 'assistant', lastMsg.content);
+      }
+      chat.updatedAt = Date.now();
+      this._saveState();
+    }
   };
 
   OwuiChatWidget.prototype._renderAll = function() {
@@ -290,24 +327,14 @@
         var roleClass = m.role === 'user' ? 'user' : 'assistant';
         var content = this._escapeHtml(m.content);
         content = content.replace(/\n/g, '<br>');
+        var isLastAsst = this.isSending && i === chat.messages.length - 1 && m.role === 'assistant';
         html += '<div class="' + CSS_PREFIX + 'message ' + CSS_PREFIX + 'message-' + roleClass + '">' +
           '<div class="' + CSS_PREFIX + 'message-role">' + (m.role === 'user' ? 'Вы' : 'AI') + '</div>' +
-          '<div class="' + CSS_PREFIX + 'message-content">' + content + '</div>' +
+          '<div class="' + CSS_PREFIX + 'message-content">' + content + (isLastAsst ? '<span class="' + CSS_PREFIX + 'cursor"></span>' : '') + '</div>' +
         '</div>';
       }
     } else {
       html = '<div class="' + CSS_PREFIX + 'empty-state">Напишите сообщение, чтобы начать диалог</div>';
-    }
-
-    if (this.isSending) {
-      html += '<div class="' + CSS_PREFIX + 'message ' + CSS_PREFIX + 'message-assistant">' +
-        '<div class="' + CSS_PREFIX + 'message-role">AI</div>' +
-        '<div class="' + CSS_PREFIX + 'message-content">' +
-          '<span class="' + CSS_PREFIX + 'typing-dot"></span>' +
-          '<span class="' + CSS_PREFIX + 'typing-dot"></span>' +
-          '<span class="' + CSS_PREFIX + 'typing-dot"></span>' +
-        '</div>' +
-      '</div>';
     }
 
     this.messagesEl.innerHTML = html;

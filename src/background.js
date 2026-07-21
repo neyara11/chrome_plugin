@@ -185,6 +185,84 @@ chrome.runtime.onInstalled.addListener(async () => {
   await buildContextMenus();
 });
 
+chrome.runtime.onConnect.addListener(function(port) {
+  if (port.name !== 'owui-stream') return;
+
+  port.onMessage.addListener(async function(msg) {
+    if (msg.action !== 'owuiStream') return;
+
+    var url = buildOwuiApiUrl(msg.endpoint, '/chat/completions');
+    console.log('[Dify BG] owuiStream URL:', url);
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, 60000);
+
+    port.onDisconnect.addListener(function() {
+      controller.abort();
+      clearTimeout(timer);
+    });
+
+    try {
+      var res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + msg.apiKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: msg.model,
+          messages: msg.messages,
+          stream: true
+        }),
+        signal: controller.signal
+      });
+
+      if (!res.ok) {
+        var errText = '';
+        try { errText = await res.text(); } catch(e) {}
+        port.postMessage({ error: 'HTTP ' + res.status + (errText ? ': ' + errText.substring(0, 200) : '') });
+        return;
+      }
+
+      var reader = res.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+
+      while (true) {
+        var result = await reader.read();
+        if (result.done) break;
+        buffer += decoder.decode(result.value, { stream: true });
+        var lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i].trim();
+          if (!line || !line.startsWith('data: ')) continue;
+          var data = line.substring(6);
+          if (data === '[DONE]') {
+            port.postMessage({ done: true });
+            return;
+          }
+          try {
+            var json = JSON.parse(data);
+            var delta = json.choices && json.choices[0] && json.choices[0].delta;
+            if (delta && delta.content) {
+              port.postMessage({ chunk: delta.content });
+            }
+          } catch(e) {}
+        }
+      }
+      port.postMessage({ done: true });
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        port.postMessage({ done: true });
+      } else {
+        port.postMessage({ error: e.message });
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+});
+
 chrome.runtime.onStartup.addListener(async () => {
   await buildContextMenus();
 });
