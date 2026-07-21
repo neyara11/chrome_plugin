@@ -3,6 +3,14 @@
 const CTX_SEL_ID = 'dify_ctx_sel_parent';
 const CTX_URL_ID = 'dify_ctx_url_parent';
 
+function buildOwuiApiUrl(baseUrl, path) {
+  var url = baseUrl.replace(/\/+$/, '');
+  if (/\/api(\/v\d+)?$/.test(url)) {
+    return url + path;
+  }
+  return url + '/api' + path;
+}
+
 async function buildContextMenus() {
   try {
     chrome.contextMenus.removeAll();
@@ -110,8 +118,67 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ success: true });
     return true;
   }
+  if (msg.action === 'fetchOwuiModels') {
+    fetchOwuiModels(msg.baseUrl, msg.apiKey)
+      .then(function(models) { sendResponse({ models: models }); })
+      .catch(function(e) { sendResponse({ error: e.message }); });
+    return true;
+  }
+  if (msg.action === 'owuiProxy') {
+    owuiProxy(msg.endpoint, msg.apiKey, msg.model, msg.messages)
+      .then(function(data) { sendResponse(data); })
+      .catch(function(e) { sendResponse({ error: e.message }); });
+    return true;
+  }
   return false;
 });
+
+async function fetchOwuiModels(baseUrl, apiKey) {
+  var url = buildOwuiApiUrl(baseUrl, '/models');
+  console.log('[Dify BG] fetchOwuiModels URL:', url);
+  var res = await fetch(url, {
+    headers: { 'Authorization': 'Bearer ' + apiKey }
+  });
+  if (!res.ok) {
+    var errBody = '';
+    try { errBody = await res.text(); } catch(e) {}
+    throw new Error('HTTP ' + res.status + ': ' + errBody.substring(0, 200));
+  }
+  var contentType = res.headers.get('content-type') || '';
+  if (contentType.indexOf('application/json') === -1) {
+    var body = await res.text();
+    console.error('[Dify BG] fetchOwuiModels: non-JSON response, first 300 chars:', body.substring(0, 300));
+    throw new Error('Ответ сервера не является JSON. Проверьте URL инстанса и API ключ.');
+  }
+  var data = await res.json();
+  return (data.data || []).map(function(m) { return m.id; });
+}
+
+async function owuiProxy(endpoint, apiKey, model, messages) {
+  var url = buildOwuiApiUrl(endpoint, '/chat/completions');
+  console.log('[Dify BG] owuiProxy URL:', url);
+  var controller = new AbortController();
+  var timer = setTimeout(function() { controller.abort(); }, 30000);
+  try {
+    var res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ model: model, messages: messages }),
+      signal: controller.signal
+    });
+    if (!res.ok) {
+      var errText = '';
+      try { errText = await res.text(); } catch(e) {}
+      throw new Error('HTTP ' + res.status + (errText ? ': ' + errText.substring(0, 200) : ''));
+    }
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 chrome.runtime.onInstalled.addListener(async () => {
   await migrate();

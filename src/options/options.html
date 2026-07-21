@@ -18,21 +18,49 @@
         <h3 id="app-form-title">Добавить приложение</h3>
         <input type="hidden" id="app-id">
         <div class="field">
+          <label for="app-type">Тип чата</label>
+          <select id="app-type">
+            <option value="dify">Dify</option>
+            <option value="openwebui">Open WebUI</option>
+          </select>
+        </div>
+        <div class="field">
           <label for="app-name">Название</label>
           <input type="text" id="app-name" placeholder="Бот поддержки">
         </div>
-        <div class="field">
-          <label for="app-url">URL чат-бота</label>
-          <input type="text" id="app-url" placeholder="https://udify.app/chatbot/xxxxx">
-        </div>
-        <div class="field-row">
+        <div id="app-dify-fields">
           <div class="field">
-            <label for="app-input-var">Переменная для текста</label>
-            <input type="text" id="app-input-var" placeholder="userinput.query" value="userinput.query">
+            <label for="app-url">URL чат-бота</label>
+            <input type="text" id="app-url" placeholder="https://udify.app/chatbot/xxxxx">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="app-input-var">Переменная для текста</label>
+              <input type="text" id="app-input-var" placeholder="userinput.query" value="userinput.query">
+            </div>
+            <div class="field">
+              <label for="app-url-var">Переменная для URL</label>
+              <input type="text" id="app-url-var" placeholder="page_url" value="page_url">
+            </div>
+          </div>
+        </div>
+        <div id="app-owui-fields" style="display:none">
+          <div class="field">
+            <label for="app-owui-url">URL инстанса Open WebUI</label>
+            <input type="text" id="app-owui-url" placeholder="https://my-openwebui.com">
           </div>
           <div class="field">
-            <label for="app-url-var">Переменная для URL</label>
-            <input type="text" id="app-url-var" placeholder="page_url" value="page_url">
+            <label for="app-owui-apikey">API ключ</label>
+            <input type="password" id="app-owui-apikey" placeholder="sk-...">
+          </div>
+          <div class="field">
+            <label for="app-owui-model">Модель</label>
+            <div class="input-with-btn">
+              <input type="text" id="app-owui-model" list="owui-models-list" placeholder="gpt-4o-mini">
+              <datalist id="owui-models-list"></datalist>
+              <button type="button" id="app-owui-fetch-models" class="btn btn-small" title="Загрузить список моделей с сервера">&#8635;</button>
+            </div>
+            <span class="hint">Введите вручную или нажмите &#8635; чтобы загрузить список</span>
           </div>
         </div>
         <div class="field">

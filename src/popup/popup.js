@@ -47,7 +47,8 @@
     apps.forEach(function (a) {
       var opt = document.createElement('option');
       opt.value = a.id;
-      opt.textContent = a.name;
+      var badge = a.type === 'openwebui' ? '[OWUI] ' : '[Dify] ';
+      opt.textContent = badge + a.name;
       select.appendChild(opt);
     });
   }

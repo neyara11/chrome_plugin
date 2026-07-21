@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Dify Chatbot",
-  "version": "2.0",
-  "description": "Inject Dify chatbot on any pages with per-site configuration",
+  "version": "2.1",
+  "description": "Inject Dify or Open WebUI chatbot on any pages with per-site configuration",
   "permissions": ["storage", "contextMenus", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": {
@@ -10,7 +10,8 @@
   },
   "content_scripts": [{
     "matches": ["<all_urls>"],
-    "js": ["lib/storage.js", "lib/url-matcher.js", "lib/dify-url.js", "content.js"],
+    "js": ["lib/storage.js", "lib/url-matcher.js", "lib/dify-url.js", "lib/owui-widget.js", "content.js"],
+    "css": ["lib/owui-widget.css"],
     "run_at": "document_idle",
     "all_frames": true
   }],

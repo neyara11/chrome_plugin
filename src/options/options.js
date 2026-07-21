@@ -2,15 +2,22 @@
   var appForm = document.getElementById('app-form');
   var appFormTitle = document.getElementById('app-form-title');
   var appIdInput = document.getElementById('app-id');
+  var appTypeSelect = document.getElementById('app-type');
   var appNameInput = document.getElementById('app-name');
   var appUrlInput = document.getElementById('app-url');
   var appInputVarInput = document.getElementById('app-input-var');
   var appUrlVarInput = document.getElementById('app-url-var');
+  var appOwuiUrlInput = document.getElementById('app-owui-url');
+  var appOwuiApikeyInput = document.getElementById('app-owui-apikey');
+  var appOwuiModelInput = document.getElementById('app-owui-model');
+  var appOwuiFetchModelsBtn = document.getElementById('app-owui-fetch-models');
   var appColorInput = document.getElementById('app-color');
   var appSaveBtn = document.getElementById('app-save-btn');
   var appCancelBtn = document.getElementById('app-cancel-btn');
   var appsList = document.getElementById('apps-list');
   var addAppBtn = document.getElementById('add-app-btn');
+  var appDifyFields = document.getElementById('app-dify-fields');
+  var appOwuiFields = document.getElementById('app-owui-fields');
 
   var siteForm = document.getElementById('site-form');
   var siteFormTitle = document.getElementById('site-form-title');
@@ -78,18 +85,21 @@
 
   function renderApps() {
     if (apps.length === 0) {
-      appsList.innerHTML = '<div class="empty">Нет приложений. Добавьте ваш первый Dify-чат.</div>';
+      appsList.innerHTML = '<div class="empty">Нет приложений. Добавьте ваш первый чат-бот.</div>';
       return;
     }
     var html = '';
     apps.forEach(function (a) {
+      var typeLabel = a.type === 'openwebui' ? 'Open WebUI' : 'Dify';
+      var metaLine = a.type === 'openwebui'
+        ? 'Тип: ' + typeLabel + ' | ' + escapeHtml(a.baseUrl) + ' | Модель: ' + escapeHtml(a.owuiModel || '—')
+        : 'Тип: ' + typeLabel + ' | ' + escapeHtml(a.baseUrl) + ' | Перем. текста: ' + escapeHtml(a.inputVariable || 'userinput.query');
       html += '<div class="card">' +
         '<div class="card-main">' +
           '<div class="card-color" style="background-color:' + escapeHtml(a.color) + '"></div>' +
           '<div class="card-info">' +
             '<div class="card-title">' + escapeHtml(a.name) + '</div>' +
-            '<div class="card-meta">' + escapeHtml(a.baseUrl) + '</div>' +
-            '<div class="card-meta">Перем. текста: ' + escapeHtml(a.inputVariable || 'userinput.query') + ' | Перем. URL: ' + escapeHtml(a.urlInputVariable || 'page_url') + '</div>' +
+            '<div class="card-meta">' + metaLine + '</div>' +
           '</div>' +
         '</div>' +
         '<div class="card-actions">' +
@@ -151,11 +161,16 @@
     if (!app) return;
     appFormTitle.textContent = 'Изменить приложение';
     appIdInput.value = app.id;
+    appTypeSelect.value = app.type || 'dify';
     appNameInput.value = app.name;
-    appUrlInput.value = app.baseUrl;
+    appUrlInput.value = app.baseUrl || '';
     appInputVarInput.value = app.inputVariable || 'userinput.query';
     appUrlVarInput.value = app.urlInputVariable || 'page_url';
+    appOwuiUrlInput.value = app.type === 'openwebui' ? app.baseUrl : '';
+    appOwuiApikeyInput.value = app.owuiApiKey || '';
+    appOwuiModelInput.value = app.owuiModel || '';
     appColorInput.value = app.color || '#155EEF';
+    updateAppTypeFields();
     appForm.style.display = 'block';
   }
 
@@ -187,19 +202,32 @@
   }
 
   function saveApp() {
+    var type = appTypeSelect.value;
     var name = appNameInput.value.trim();
-    var url = appUrlInput.value.trim();
-    if (!name || !url) { alert('Название и URL обязательны для заполнения'); return; }
-    if (!/^https?:\/\//.test(url)) { alert('URL должен начинаться с http:// или https://'); return; }
+    if (!name) { alert('Название обязательно для заполнения'); return; }
 
     var app = {
       id: appIdInput.value || generateId(),
+      type: type,
       name: name,
-      baseUrl: url,
-      inputVariable: appInputVarInput.value.trim() || 'userinput.query',
-      urlInputVariable: appUrlVarInput.value.trim() || 'page_url',
       color: appColorInput.value || '#155EEF'
     };
+
+    if (type === 'dify') {
+      var url = appUrlInput.value.trim();
+      if (!url) { alert('URL чат-бота обязателен'); return; }
+      if (!/^https?:\/\//.test(url)) { alert('URL должен начинаться с http:// или https://'); return; }
+      app.baseUrl = url;
+      app.inputVariable = appInputVarInput.value.trim() || 'userinput.query';
+      app.urlInputVariable = appUrlVarInput.value.trim() || 'page_url';
+    } else if (type === 'openwebui') {
+      var owuiUrl = appOwuiUrlInput.value.trim();
+      if (!owuiUrl) { alert('URL инстанса Open WebUI обязателен'); return; }
+      if (!/^https?:\/\//.test(owuiUrl)) { alert('URL должен начинаться с http:// или https://'); return; }
+      app.baseUrl = owuiUrl.replace(/\/+$/, '');
+      app.owuiApiKey = appOwuiApikeyInput.value.trim();
+      app.owuiModel = appOwuiModelInput.value.trim() || 'gpt-4o-mini';
+    }
 
     if (!appIdInput.value) {
       apps.push(app);
@@ -243,12 +271,64 @@
   function hideAppForm() {
     appForm.style.display = 'none';
     appIdInput.value = '';
+    appTypeSelect.value = 'dify';
     appNameInput.value = '';
     appUrlInput.value = '';
     appInputVarInput.value = 'userinput.query';
     appUrlVarInput.value = 'page_url';
+    appOwuiUrlInput.value = '';
+    appOwuiApikeyInput.value = '';
+    appOwuiModelInput.value = '';
     appColorInput.value = '#155EEF';
+    updateAppTypeFields();
   }
+
+  function updateAppTypeFields() {
+    var type = appTypeSelect.value;
+    if (type === 'dify') {
+      appDifyFields.style.display = 'block';
+      appOwuiFields.style.display = 'none';
+    } else {
+      appDifyFields.style.display = 'none';
+      appOwuiFields.style.display = 'block';
+    }
+  }
+
+  appTypeSelect.addEventListener('change', updateAppTypeFields);
+
+  appOwuiFetchModelsBtn.addEventListener('click', async function() {
+    var baseUrl = appOwuiUrlInput.value.trim();
+    var apiKey = appOwuiApikeyInput.value.trim();
+    if (!baseUrl || !apiKey) {
+      alert('Сначала заполните URL инстанса и API ключ');
+      return;
+    }
+    appOwuiFetchModelsBtn.disabled = true;
+    appOwuiFetchModelsBtn.textContent = '...';
+    try {
+      var response = await chrome.runtime.sendMessage({
+        action: 'fetchOwuiModels',
+        baseUrl: baseUrl,
+        apiKey: apiKey
+      });
+      if (response.error) {
+        alert('Ошибка загрузки моделей: ' + response.error);
+      } else {
+        var datalist = document.getElementById('owui-models-list');
+        datalist.innerHTML = '';
+        (response.models || []).forEach(function(modelName) {
+          var opt = document.createElement('option');
+          opt.value = modelName;
+          datalist.appendChild(opt);
+        });
+        alert('Загружено ' + (response.models || []).length + ' моделей');
+      }
+    } catch (e) {
+      alert('Ошибка соединения: ' + e.message);
+    }
+    appOwuiFetchModelsBtn.disabled = false;
+    appOwuiFetchModelsBtn.textContent = '\u21BB';
+  });
 
   function hideSiteForm() {
     siteForm.style.display = 'none';
@@ -268,11 +348,16 @@
   addAppBtn.addEventListener('click', function () {
     appFormTitle.textContent = 'Добавить приложение';
     appIdInput.value = '';
+    appTypeSelect.value = 'dify';
     appNameInput.value = '';
     appUrlInput.value = '';
     appInputVarInput.value = 'userinput.query';
     appUrlVarInput.value = 'page_url';
+    appOwuiUrlInput.value = '';
+    appOwuiApikeyInput.value = '';
+    appOwuiModelInput.value = '';
     appColorInput.value = '#155EEF';
+    updateAppTypeFields();
     appForm.style.display = 'block';
   });
 

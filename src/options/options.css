@@ -138,3 +138,31 @@ select:focus { border-color: var(--primary); outline: none; }
 .list { margin-bottom: 12px; }
 
 .empty { padding: 20px; text-align: center; color: #999; font-size: 13px; }
+
+.input-with-btn {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.input-with-btn input[type="text"] {
+  flex: 1;
+}
+.input-with-btn input[type="password"] {
+  flex: 1;
+}
+.input-with-btn .btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+input[type="password"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  color: var(--text);
+  background: #fff;
+  transition: border-color 0.15s;
+}
+input[type="password"]:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 2px rgba(21,94,239,0.15); }

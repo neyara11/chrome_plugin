@@ -30,6 +30,7 @@
   }
 
   var iframeMap = {};
+  var widgetMap = {};
   var closeBtnMap = {};
   var currentApp = null;
   var bubbleBtn = null;
@@ -108,7 +109,54 @@
     return true;
   }
 
+  function createWrapperElement() {
+    var oldWrapper = document.getElementById('dify-chatbot-bubble-window');
+    if (oldWrapper) oldWrapper.remove();
+    var wrapper = document.createElement('div');
+    wrapper.id = 'dify-chatbot-bubble-window';
+    wrapper.setAttribute('data-dify-visible', 'true');
+    wrapper.style.cssText = 'position:fixed;bottom:6.7rem;right:1rem;width:min(30rem,calc(100vw - 2rem));height:min(48rem,calc(100vh - 8.5rem));z-index:2147483647;border-radius:0.75rem;box-shadow:rgba(150,150,150,0.2) 0px 10px 30px 0px,rgba(150,150,150,0.2) 0px 0px 0px 1px;overflow:hidden;resize:both;direction:rtl;min-width:18rem;min-height:22rem;max-width:calc(100vw - 2rem);max-height:calc(100vh - 6.7rem);';
+    return wrapper;
+  }
+
+  function createCloseButton(wrapper, appId) {
+    var closeBtn = document.createElement('div');
+    closeBtn.style.cssText = 'position:fixed;right:14px;width:28px;height:28px;border-radius:14px;background:rgba(0,0,0,0.55);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;line-height:1;z-index:2147483648;font-family:Arial,sans-serif;transition:background 0.15s;';
+    closeBtn.textContent = '\u00D7';
+    closeBtn.title = 'Закрыть';
+    closeBtn.addEventListener('mouseenter', function () { closeBtn.style.background = 'rgba(0,0,0,0.8)'; });
+    closeBtn.addEventListener('mouseleave', function () { closeBtn.style.background = 'rgba(0,0,0,0.55)'; });
+    closeBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      wrapper.setAttribute('data-dify-visible', 'false');
+      closeBtn.style.display = 'none';
+      if (displayDiv) displayDiv.innerHTML = OPEN_ICON;
+    });
+    document.body.appendChild(closeBtn);
+    closeBtnMap[appId] = closeBtn;
+
+    function updateCloseBtnPos() {
+      var rect = wrapper.getBoundingClientRect();
+      closeBtn.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+      closeBtn.style.right = (window.innerWidth - rect.right + 6) + 'px';
+    }
+    updateCloseBtnPos();
+
+    if (window.ResizeObserver) {
+      var ro = new ResizeObserver(function () { updateCloseBtnPos(); });
+      ro.observe(wrapper);
+    } else {
+      setInterval(updateCloseBtnPos, 500);
+    }
+    return closeBtn;
+  }
+
   function createOrShowIframe(app, prefillValue, mode) {
+    if (app.type === 'openwebui') {
+      createOrShowOwuiWidget(app, prefillValue, mode);
+      return;
+    }
+
     var existing = iframeMap[app.id];
     var url = app.baseUrl;
 
@@ -131,13 +179,7 @@
       url = buildChatbotUrl(app.baseUrl, v2, prefillValue);
     }
 
-    var oldWrapper = document.getElementById('dify-chatbot-bubble-window');
-    if (oldWrapper) oldWrapper.remove();
-
-    var wrapper = document.createElement('div');
-    wrapper.id = 'dify-chatbot-bubble-window';
-    wrapper.setAttribute('data-dify-visible', 'true');
-    wrapper.style.cssText = 'position:fixed;bottom:6.7rem;right:1rem;width:min(30rem,calc(100vw - 2rem));height:min(48rem,calc(100vh - 8.5rem));z-index:2147483647;border-radius:0.75rem;box-shadow:rgba(150,150,150,0.2) 0px 10px 30px 0px,rgba(150,150,150,0.2) 0px 0px 0px 1px;overflow:hidden;resize:both;direction:rtl;min-width:18rem;min-height:22rem;max-width:calc(100vw - 2rem);max-height:calc(100vh - 6.7rem);';
+    var wrapper = createWrapperElement();
 
     var iframe = document.createElement('iframe');
     iframe.allow = 'fullscreen;microphone';
@@ -153,34 +195,50 @@
 
     document.body.appendChild(wrapper);
 
-    var closeBtn = document.createElement('div');
-    closeBtn.style.cssText = 'position:fixed;right:14px;width:28px;height:28px;border-radius:14px;background:rgba(0,0,0,0.55);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;line-height:1;z-index:2147483648;font-family:Arial,sans-serif;transition:background 0.15s;';
-    closeBtn.textContent = '\u00D7';
-    closeBtn.title = 'Закрыть';
-    closeBtn.addEventListener('mouseenter', function () { closeBtn.style.background = 'rgba(0,0,0,0.8)'; });
-    closeBtn.addEventListener('mouseleave', function () { closeBtn.style.background = 'rgba(0,0,0,0.55)'; });
-    closeBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      wrapper.setAttribute('data-dify-visible', 'false');
-      closeBtn.style.display = 'none';
-      if (displayDiv) displayDiv.innerHTML = OPEN_ICON;
+    createCloseButton(wrapper, app.id);
+
+    if (displayDiv) displayDiv.innerHTML = CLOSE_ICON;
+  }
+
+  function createOrShowOwuiWidget(app, prefillValue, mode) {
+    var existing = widgetMap[app.id];
+    if (existing) {
+      existing.show();
+      var wrapper = document.getElementById('dify-chatbot-bubble-window');
+      if (wrapper) wrapper.setAttribute('data-dify-visible', 'true');
+      var cb = closeBtnMap[app.id];
+      if (cb) cb.style.display = 'block';
+      if (displayDiv) displayDiv.innerHTML = CLOSE_ICON;
+      if (prefillValue) {
+        var text = mode === 'url' ? 'URL страницы: ' + prefillValue : prefillValue;
+        existing.sendMessage(text);
+      }
+      return;
+    }
+
+    var wrapper = createWrapperElement();
+
+    var hostname = '';
+    try { hostname = window.location.hostname; } catch (e) {}
+
+    var widget = new OwuiChatWidget({
+      apiKey: app.owuiApiKey,
+      endpoint: app.baseUrl,
+      model: app.owuiModel,
+      appId: app.id,
+      hostname: hostname
     });
-    document.body.appendChild(closeBtn);
-    closeBtnMap[app.id] = closeBtn;
+    widget.mount(wrapper);
+    widgetMap[app.id] = widget;
 
-    function updateCloseBtnPos() {
-      var rect = wrapper.getBoundingClientRect();
-      closeBtn.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
-      closeBtn.style.right = (window.innerWidth - rect.right + 6) + 'px';
+    if (prefillValue) {
+      var text = mode === 'url' ? 'URL страницы: ' + prefillValue : prefillValue;
+      setTimeout(function () { widget.sendMessage(text); }, 600);
     }
-    updateCloseBtnPos();
 
-    if (window.ResizeObserver) {
-      var ro = new ResizeObserver(function () { updateCloseBtnPos(); });
-      ro.observe(wrapper);
-    } else {
-      setInterval(updateCloseBtnPos, 500);
-    }
+    document.body.appendChild(wrapper);
+
+    createCloseButton(wrapper, app.id);
 
     if (displayDiv) displayDiv.innerHTML = CLOSE_ICON;
   }
@@ -191,16 +249,21 @@
       if (wrapper) wrapper.setAttribute('data-dify-visible', 'false');
       var cb = closeBtnMap[k];
       if (cb) cb.style.display = 'none';
+      var widget = widgetMap[k];
+      if (widget) widget.hide();
     });
   }
 
   function toggleChatbot(app) {
     var wrapper = document.getElementById('dify-chatbot-bubble-window');
     var iframe = iframeMap[app.id];
-    if (wrapper && iframe && wrapper.getAttribute('data-dify-visible') === 'true') {
+    var widget = widgetMap[app.id];
+    var isOpen = wrapper && (iframe || widget) && wrapper.getAttribute('data-dify-visible') === 'true';
+    if (isOpen) {
       wrapper.setAttribute('data-dify-visible', 'false');
       var cb = closeBtnMap[app.id];
       if (cb) cb.style.display = 'none';
+      if (widget) widget.hide();
       if (displayDiv) displayDiv.innerHTML = OPEN_ICON;
     } else {
       hideAll();
@@ -215,9 +278,11 @@
       var app = apps.find(function (a) { return a.id === appId; });
       if (!app) return;
 
-      copyAndNotify(value, mode);
       hideAll();
       createOrShowIframe(app, value, mode);
+      if (app.type !== 'openwebui') {
+        copyAndNotify(value, mode);
+      }
     });
   }
 
@@ -296,6 +361,8 @@
     if (bubbleBtn) { bubbleBtn.remove(); bubbleBtn = null; displayDiv = null; }
     Object.values(closeBtnMap).forEach(function (cb) { if (cb.parentNode) cb.remove(); });
     closeBtnMap = {};
+    Object.values(widgetMap).forEach(function (w) { try { w.destroy(); } catch(e) {} });
+    widgetMap = {};
     var wrapper = document.getElementById('dify-chatbot-bubble-window');
     if (wrapper) wrapper.remove();
     iframeMap = {};
