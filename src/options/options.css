@@ -166,3 +166,47 @@ input[type="password"] {
   transition: border-color 0.15s;
 }
 input[type="password"]:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 2px rgba(21,94,239,0.15); }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1e1e2e;
+    --text: #cdd6f4;
+    --text-secondary: #a6adc8;
+    --border: #313244;
+    --primary: #6366f1;
+    --primary-hover: #4f46e5;
+    --danger: #f38ba8;
+    --danger-hover: #eba0ac;
+    --card-bg: #181825;
+  }
+
+  input[type="text"],
+  input[type="password"],
+  select {
+    background: #11111b;
+    color: #cdd6f4;
+    border-color: #313244;
+  }
+
+  .btn {
+    background: #313244;
+    color: #cdd6f4;
+    border-color: #45475a;
+  }
+  .btn:hover {
+    background: #45475a;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+  }
+  .btn-danger {
+    background: #313244;
+    color: #f38ba8;
+    border-color: #f38ba8;
+  }
+  .btn-danger:hover {
+    background: rgba(243, 139, 168, 0.15);
+  }
+}

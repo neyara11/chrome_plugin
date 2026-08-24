@@ -20,6 +20,11 @@
   var appOwuiFields = document.getElementById('app-owui-fields');
 
   var siteForm = document.getElementById('site-form');
+  var sitePatternTesterInput = document.getElementById('site-pattern-tester');
+  var sitePatternTestResult = document.getElementById('site-pattern-test-result');
+  var exportBtn = document.getElementById('export-btn');
+  var importBtn = document.getElementById('import-btn');
+  var importFileInput = document.getElementById('import-file-input');
   var siteFormTitle = document.getElementById('site-form-title');
   var siteIdInput = document.getElementById('site-id');
   var sitePatternInput = document.getElementById('site-pattern');
@@ -94,7 +99,7 @@
       var metaLine = a.type === 'openwebui'
         ? 'Тип: ' + typeLabel + ' | ' + escapeHtml(a.baseUrl) + ' | Модель: ' + escapeHtml(a.owuiModel || '—')
         : 'Тип: ' + typeLabel + ' | ' + escapeHtml(a.baseUrl) + ' | Перем. текста: ' + escapeHtml(a.inputVariable || 'userinput.query');
-      html += '<div class="card">' +
+          html += '<div class="card">' +
         '<div class="card-main">' +
           '<div class="card-color" style="background-color:' + escapeHtml(a.color) + '"></div>' +
           '<div class="card-info">' +
@@ -103,6 +108,7 @@
           '</div>' +
         '</div>' +
         '<div class="card-actions">' +
+          '<button class="btn btn-small" data-clone-app="' + escapeHtml(a.id) + '" title="Дублировать приложение">Копия</button>' +
           '<button class="btn btn-small" data-edit-app="' + escapeHtml(a.id) + '">Изменить</button>' +
           '<button class="btn btn-small btn-danger" data-delete-app="' + escapeHtml(a.id) + '">Удалить</button>' +
         '</div>' +
@@ -113,6 +119,9 @@
   }
 
   function bindAppButtons() {
+    appsList.querySelectorAll('[data-clone-app]').forEach(function (btn) {
+      btn.addEventListener('click', function () { cloneApp(btn.dataset.cloneApp); });
+    });
     appsList.querySelectorAll('[data-edit-app]').forEach(function (btn) {
       btn.addEventListener('click', function () { editApp(btn.dataset.editApp); });
     });
@@ -156,6 +165,17 @@
     });
   }
 
+  async function cloneApp(id) {
+    var original = getAppById(id);
+    if (!original) return;
+    var copy = JSON.parse(JSON.stringify(original));
+    copy.id = generateId();
+    copy.name = original.name + ' (Копия)';
+    apps.push(copy);
+    await saveAll();
+    renderAll();
+  }
+
   function editApp(id) {
     var app = getAppById(id);
     if (!app) return;
@@ -182,6 +202,8 @@
     sitePatternInput.value = site.pattern;
     siteAppSelect.value = site.appId || '';
     siteEnabledCheckbox.checked = site.enabled !== false;
+    sitePatternTesterInput.value = '';
+    sitePatternTestResult.textContent = '';
     siteForm.style.display = 'block';
   }
 
@@ -330,12 +352,39 @@
     appOwuiFetchModelsBtn.textContent = '\u21BB';
   });
 
+  function testSitePattern() {
+    var pattern = sitePatternInput.value.trim();
+    var testUrl = sitePatternTesterInput.value.trim();
+    if (!pattern || !testUrl) {
+      sitePatternTestResult.textContent = '';
+      return;
+    }
+    try {
+      var isMatch = matchUrl(pattern, testUrl);
+      if (isMatch) {
+        sitePatternTestResult.textContent = '✓ Совпадает!';
+        sitePatternTestResult.style.color = '#16a34a';
+      } else {
+        sitePatternTestResult.textContent = '✕ Не совпадает';
+        sitePatternTestResult.style.color = '#dc2626';
+      }
+    } catch (e) {
+      sitePatternTestResult.textContent = 'Ошибка сопоставления: ' + e.message;
+      sitePatternTestResult.style.color = '#dc2626';
+    }
+  }
+
+  sitePatternInput.addEventListener('input', testSitePattern);
+  sitePatternTesterInput.addEventListener('input', testSitePattern);
+
   function hideSiteForm() {
     siteForm.style.display = 'none';
     siteIdInput.value = '';
     sitePatternInput.value = '';
     siteAppSelect.value = '';
     siteEnabledCheckbox.checked = true;
+    sitePatternTesterInput.value = '';
+    sitePatternTestResult.textContent = '';
   }
 
   function renderAll() {
@@ -364,12 +413,67 @@
   appSaveBtn.addEventListener('click', saveApp);
   appCancelBtn.addEventListener('click', hideAppForm);
 
+  function exportConfig() {
+    var data = {
+      version: '2.1',
+      exportedAt: new Date().toISOString(),
+      difyChatbotV2: {
+        apps: apps,
+        sites: sites,
+        settings: settings
+      }
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'dify-chatbot-config-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importConfig(e) {
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = async function (event) {
+      try {
+        var parsed = JSON.parse(event.target.result);
+        var payload = parsed.difyChatbotV2 || parsed;
+        if (!payload.apps || !Array.isArray(payload.apps)) {
+          throw new Error('Некорректный формат файла: отсутствует массив apps');
+        }
+        if (!confirm('Импортировать настройки? Текущие приложения и правила будут перезаписаны.')) {
+          importFileInput.value = '';
+          return;
+        }
+        apps = payload.apps || [];
+        sites = payload.sites || [];
+        settings = payload.settings || { defaultAppId: null, showOnAllSites: false };
+        await saveAll();
+        renderAll();
+        alert('Настройки успешно импортированы!');
+      } catch (err) {
+        alert('Ошибка импорта: ' + err.message);
+      } finally {
+        importFileInput.value = '';
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  exportBtn.addEventListener('click', exportConfig);
+  importBtn.addEventListener('click', function () { importFileInput.click(); });
+  importFileInput.addEventListener('change', importConfig);
+
   addSiteBtn.addEventListener('click', function () {
     siteFormTitle.textContent = 'Добавить правило';
     siteIdInput.value = '';
     sitePatternInput.value = '';
     siteAppSelect.value = '';
     siteEnabledCheckbox.checked = true;
+    sitePatternTesterInput.value = '';
+    sitePatternTestResult.textContent = '';
     siteForm.style.display = 'block';
   });
 

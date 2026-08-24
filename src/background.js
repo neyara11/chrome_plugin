@@ -100,9 +100,15 @@ async function sendOrInject(tabId, message) {
     await chrome.tabs.sendMessage(tabId, message);
   } catch (e) {
     try {
+      await chrome.scripting.insertCSS({
+        target: { tabId: tabId },
+        files: ['lib/owui-widget.css']
+      });
+    } catch (cssErr) {}
+    try {
       await chrome.scripting.executeScript({
         target: { tabId: tabId },
-        files: ['lib/storage.js', 'lib/url-matcher.js', 'lib/dify-url.js', 'content.js']
+        files: ['lib/storage.js', 'lib/url-matcher.js', 'lib/dify-url.js', 'lib/owui-widget.js', 'content.js']
       });
       await new Promise(function (r) { setTimeout(r, 200); });
       await chrome.tabs.sendMessage(tabId, message);
@@ -265,6 +271,19 @@ chrome.runtime.onConnect.addListener(function(port) {
 
 chrome.runtime.onStartup.addListener(async () => {
   await buildContextMenus();
+});
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === 'toggle_chatbot') {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tabs[0]) {
+      try {
+        await sendOrInject(tabs[0].id, { action: 'toggleChatbot' });
+      } catch (e) {
+        console.error('[Dify BG] toggle_chatbot command failed:', e);
+      }
+    }
+  }
 });
 
 chrome.storage.local.onChanged.addListener(async (changes, areaName) => {

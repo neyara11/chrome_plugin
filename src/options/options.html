@@ -88,6 +88,11 @@
           <span class="hint">Используйте * для поддоменов, например *.site1.ru</span>
         </div>
         <div class="field">
+          <label for="site-pattern-tester">Проверить URL (тестер)</label>
+          <input type="text" id="site-pattern-tester" placeholder="https://sub.example.com/page">
+          <div id="site-pattern-test-result" class="hint" style="margin-top: 4px; font-weight: 500;"></div>
+        </div>
+        <div class="field">
           <label for="site-app">Приложение</label>
           <select id="site-app"></select>
         </div>
@@ -119,9 +124,19 @@
         </label>
       </div>
     </section>
+
+    <section class="section">
+      <h2>Резервное копирование и синхронизация</h2>
+      <div class="form-actions" style="margin-top: 0; justify-content: flex-start; gap: 10px;">
+        <button id="export-btn" class="btn">Экспорт настроек (JSON)</button>
+        <button id="import-btn" class="btn">Импорт настроек (JSON)</button>
+        <input type="file" id="import-file-input" accept=".json" style="display:none">
+      </div>
+    </section>
   </div>
 
   <script src="../lib/storage.js"></script>
+  <script src="../lib/url-matcher.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

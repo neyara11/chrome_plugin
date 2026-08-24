@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Dify Chatbot",
-  "version": "2.1",
+  "version": "2.2",
   "description": "Inject Dify or Open WebUI chatbot on any pages with per-site configuration",
   "permissions": ["storage", "contextMenus", "scripting"],
   "host_permissions": ["<all_urls>"],
@@ -33,5 +33,13 @@
   "options_ui": {
     "page": "options/options.html",
     "open_in_tab": true
+  },
+  "commands": {
+    "toggle_chatbot": {
+      "suggested_key": {
+        "default": "Alt+Shift+C"
+      },
+      "description": "Открыть / скрыть окно чат-бота"
+    }
   }
 }

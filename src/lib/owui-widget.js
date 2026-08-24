@@ -14,6 +14,7 @@
     this.chats = [];
     this.activeChatId = null;
     this.isSending = false;
+    this.activePort = null;
     this.sidebarVisible = false;
 
     this.el = null;
@@ -33,6 +34,10 @@
   };
 
   OwuiChatWidget.prototype.destroy = function() {
+    if (this.activePort) {
+      try { this.activePort.disconnect(); } catch (e) {}
+      this.activePort = null;
+    }
     if (this.el && this.el.parentNode) {
       this.el.parentNode.removeChild(this.el);
     }
@@ -85,8 +90,11 @@
             '<div class="' + CSS_PREFIX + 'input-wrapper">' +
               '<textarea class="' + CSS_PREFIX + 'textarea" placeholder="Введите сообщение..." rows="1"></textarea>' +
               '<button class="' + CSS_PREFIX + 'send-btn" title="Отправить">' +
-                '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">' +
+                '<svg class="' + CSS_PREFIX + 'send-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">' +
                   '<path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>' +
+                '</svg>' +
+                '<svg class="' + CSS_PREFIX + 'stop-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:none;">' +
+                  '<rect x="4" y="4" width="16" height="16" rx="2"></rect>' +
                 '</svg>' +
               '</button>' +
             '</div>' +
@@ -135,10 +143,97 @@
       self._switchChat(item.dataset.chatId);
       self._toggleSidebar();
     });
+
+    this.messagesEl.addEventListener('click', function(e) {
+      var copyBtn = e.target.closest('.' + CSS_PREFIX + 'code-copy-btn');
+      if (!copyBtn) return;
+      var codeEl = copyBtn.parentNode.querySelector('code');
+      if (!codeEl) return;
+      var textToCopy = codeEl.innerText || codeEl.textContent;
+      navigator.clipboard.writeText(textToCopy).then(function() {
+        copyBtn.textContent = 'Скопировано!';
+        setTimeout(function() { copyBtn.textContent = 'Копировать'; }, 2000);
+      });
+    });
   };
 
   OwuiChatWidget.prototype._escapeHtml = function(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+
+  OwuiChatWidget.prototype._renderMarkdown = function(rawText) {
+    if (!rawText) return '';
+    var codeBlocks = [];
+    var text = rawText.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, function(match, lang, code) {
+      var id = '___CODE_BLOCK_' + codeBlocks.length + '___';
+      codeBlocks.push({ lang: lang || '', code: code });
+      return id;
+    });
+
+    var inlineCodes = [];
+    text = text.replace(/`([^`\n]+)`/g, function(match, code) {
+      var id = '___INLINE_CODE_' + inlineCodes.length + '___';
+      inlineCodes.push(code);
+      return id;
+    });
+
+    text = this._escapeHtml(text);
+
+    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    text = text.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+    var lines = text.split('\n');
+    var inList = false;
+    var outLines = [];
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var listMatch = line.match(/^(\s*)[*-]\s+(.*)$/);
+      if (listMatch) {
+        if (!inList) {
+          outLines.push('<ul>');
+          inList = true;
+        }
+        outLines.push('<li>' + listMatch[2] + '</li>');
+      } else {
+        if (inList) {
+          outLines.push('</ul>');
+          inList = false;
+        }
+        var hMatch = line.match(/^(#{1,4})\s+(.*)$/);
+        if (hMatch) {
+          var level = hMatch[1].length;
+          outLines.push('<h' + (level + 2) + ' class="owui-md-h">' + hMatch[2] + '</h' + (level + 2) + '>');
+        } else if (line.trim() === '') {
+          outLines.push('<br>');
+        } else {
+          outLines.push('<p>' + line + '</p>');
+        }
+      }
+    }
+    if (inList) outLines.push('</ul>');
+    var html = outLines.join('');
+
+    for (var j = 0; j < inlineCodes.length; j++) {
+      html = html.replace('___INLINE_CODE_' + j + '___', '<code class="owui-inline-code">' + this._escapeHtml(inlineCodes[j]) + '</code>');
+    }
+
+    for (var k = 0; k < codeBlocks.length; k++) {
+      var block = codeBlocks[k];
+      var blockHtml =
+        '<div class="owui-code-block">' +
+          '<div class="owui-code-header">' +
+            '<span class="owui-code-lang">' + this._escapeHtml(block.lang) + '</span>' +
+            '<button type="button" class="owui-code-copy-btn">Копировать</button>' +
+          '</div>' +
+          '<pre><code>' + this._escapeHtml(block.code) + '</code></pre>' +
+        '</div>';
+      html = html.replace('___CODE_BLOCK_' + k + '___', blockHtml);
+    }
+
+    return html;
   };
 
   OwuiChatWidget.prototype._toggleSidebar = function() {
@@ -215,9 +310,39 @@
   };
 
   OwuiChatWidget.prototype._onSendClick = function() {
+    if (this.isSending) {
+      this._stopGeneration();
+      return;
+    }
     var text = this.textareaEl.value.trim();
-    if (!text || this.isSending) return;
+    if (!text) return;
     this._doSend(text);
+  };
+
+  OwuiChatWidget.prototype._stopGeneration = function() {
+    if (this.activePort) {
+      try { this.activePort.disconnect(); } catch (e) {}
+      this.activePort = null;
+    }
+    this._finishStream();
+  };
+
+  OwuiChatWidget.prototype._updateSendBtnState = function() {
+    var sendIcon = this.sendBtnEl.querySelector('.' + CSS_PREFIX + 'send-icon');
+    var stopIcon = this.sendBtnEl.querySelector('.' + CSS_PREFIX + 'stop-icon');
+    if (this.isSending) {
+      this.sendBtnEl.title = 'Остановить';
+      this.sendBtnEl.classList.add(CSS_PREFIX + 'btn-stop');
+      if (sendIcon) sendIcon.style.display = 'none';
+      if (stopIcon) stopIcon.style.display = 'block';
+      this.sendBtnEl.disabled = false;
+    } else {
+      this.sendBtnEl.title = 'Отправить';
+      this.sendBtnEl.classList.remove(CSS_PREFIX + 'btn-stop');
+      if (sendIcon) sendIcon.style.display = 'block';
+      if (stopIcon) stopIcon.style.display = 'none';
+      this.sendBtnEl.disabled = false;
+    }
   };
 
   OwuiChatWidget.prototype._doSend = function(text) {
@@ -225,12 +350,12 @@
     this.isSending = true;
     this.textareaEl.value = '';
     this.textareaEl.style.height = 'auto';
-    this.sendBtnEl.disabled = true;
+    this._updateSendBtnState();
 
     var chat = this._getActiveChat();
     if (!chat) {
       this.isSending = false;
-      this.sendBtnEl.disabled = false;
+      this._updateSendBtnState();
       return;
     }
 
@@ -252,6 +377,7 @@
     }
 
     var port = chrome.runtime.connect({ name: 'owui-stream' });
+    this.activePort = port;
 
     port.onMessage.addListener(function(msg) {
       if (msg.chunk) {
@@ -260,7 +386,6 @@
         var lastMsg = updatedChat.messages[updatedChat.messages.length - 1];
         if (lastMsg && lastMsg.role === 'assistant') {
           lastMsg.content += msg.chunk;
-          self._saveState();
           self._renderMessages();
         }
       } else if (msg.done) {
@@ -275,10 +400,8 @@
           updatedChat.messages.push({ role: 'assistant', content: '⚠️ Ошибка: ' + msg.error });
           updatedChat.updatedAt = Date.now();
           addMessageToChat(self.appId, self.hostname, updatedChat.id, 'assistant', '⚠️ Ошибка: ' + msg.error);
-          self._saveState();
         }
         self._finishStream(port);
-        self._renderMessages();
       }
     });
 
@@ -296,9 +419,12 @@
   };
 
   OwuiChatWidget.prototype._finishStream = function(port) {
-    try { port.disconnect(); } catch(e) {}
+    if (port && port === this.activePort) {
+      try { port.disconnect(); } catch(e) {}
+      this.activePort = null;
+    }
     this.isSending = false;
-    this.sendBtnEl.disabled = false;
+    this._updateSendBtnState();
     this.textareaEl.focus();
 
     var chat = this._getActiveChat();
@@ -310,6 +436,7 @@
       chat.updatedAt = Date.now();
       this._saveState();
     }
+    this._renderMessages();
   };
 
   OwuiChatWidget.prototype._renderAll = function() {
@@ -321,16 +448,22 @@
     var chat = this._getActiveChat();
     var html = '';
 
+    var scrollThreshold = 60;
+    var isNearBottom = this.messagesEl
+      ? (this.messagesEl.scrollHeight - this.messagesEl.scrollTop - this.messagesEl.clientHeight <= scrollThreshold)
+      : true;
+
     if (chat && chat.messages.length > 0) {
       for (var i = 0; i < chat.messages.length; i++) {
         var m = chat.messages[i];
         var roleClass = m.role === 'user' ? 'user' : 'assistant';
-        var content = this._escapeHtml(m.content);
-        content = content.replace(/\n/g, '<br>');
+        var renderedContent = m.role === 'user'
+          ? this._escapeHtml(m.content).replace(/\n/g, '<br>')
+          : this._renderMarkdown(m.content);
         var isLastAsst = this.isSending && i === chat.messages.length - 1 && m.role === 'assistant';
         html += '<div class="' + CSS_PREFIX + 'message ' + CSS_PREFIX + 'message-' + roleClass + '">' +
           '<div class="' + CSS_PREFIX + 'message-role">' + (m.role === 'user' ? 'Вы' : 'AI') + '</div>' +
-          '<div class="' + CSS_PREFIX + 'message-content">' + content + (isLastAsst ? '<span class="' + CSS_PREFIX + 'cursor"></span>' : '') + '</div>' +
+          '<div class="' + CSS_PREFIX + 'message-content">' + renderedContent + (isLastAsst ? '<span class="' + CSS_PREFIX + 'cursor"></span>' : '') + '</div>' +
         '</div>';
       }
     } else {
@@ -338,7 +471,9 @@
     }
 
     this.messagesEl.innerHTML = html;
-    this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    if (isNearBottom) {
+      this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+    }
   };
 
   OwuiChatWidget.prototype._renderSidebar = function() {

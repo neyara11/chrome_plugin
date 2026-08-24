@@ -255,6 +255,8 @@
   }
 
   function toggleChatbot(app) {
+    if (!app && currentApp) app = currentApp;
+    if (!app) return;
     var wrapper = document.getElementById('dify-chatbot-bubble-window');
     var iframe = iframeMap[app.id];
     var widget = widgetMap[app.id];
@@ -318,23 +320,56 @@
   }
 
   function handleElementDrag(targetButton) {
-    var mouseX = 0, mouseY = 0, offsetX = 0, offsetY = 0;
+    var mouseX = 0, mouseY = 0, startX = 0, startY = 0, offsetX = 0, offsetY = 0;
+    var isDragging = false;
+    var moved = false;
+
     targetButton.addEventListener('mousedown', function (event) {
-      mouseX = event.clientX; mouseY = event.clientY;
+      if (event.button !== 0) return;
+      mouseX = event.clientX;
+      mouseY = event.clientY;
+      startX = event.clientX;
+      startY = event.clientY;
       var rect = targetButton.getBoundingClientRect();
-      offsetX = mouseX - rect.left; offsetY = mouseY - rect.top;
+      offsetX = mouseX - rect.left;
+      offsetY = mouseY - rect.top;
+      isDragging = true;
+      moved = false;
       document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp, { once: true });
     });
-    document.addEventListener('mouseup', function () {
-      document.removeEventListener('mousemove', onMouseMove);
-    });
+
     function onMouseMove(event) {
-      var newX = event.clientX - offsetX, newY = event.clientY - offsetY;
-      newX = Math.max(12, Math.min(newX, window.innerWidth - targetButton.offsetWidth));
-      newY = Math.max(12, Math.min(newY, window.innerHeight - targetButton.offsetHeight));
-      targetButton.style.left = newX + 'px'; targetButton.style.top = newY + 'px';
-      targetButton.style.right = 'unset'; targetButton.style.bottom = 'unset';
+      if (!isDragging) return;
+      var dx = event.clientX - startX;
+      var dy = event.clientY - startY;
+      if (!moved && Math.hypot(dx, dy) > 5) {
+        moved = true;
+      }
+      if (moved) {
+        var newX = event.clientX - offsetX;
+        var newY = event.clientY - offsetY;
+        newX = Math.max(12, Math.min(newX, window.innerWidth - targetButton.offsetWidth));
+        newY = Math.max(12, Math.min(newY, window.innerHeight - targetButton.offsetHeight));
+        targetButton.style.left = newX + 'px';
+        targetButton.style.top = newY + 'px';
+        targetButton.style.right = 'unset';
+        targetButton.style.bottom = 'unset';
+      }
     }
+
+    function onMouseUp(event) {
+      isDragging = false;
+      document.removeEventListener('mousemove', onMouseMove);
+    }
+
+    targetButton.addEventListener('click', function (event) {
+      if (moved) {
+        event.stopImmediatePropagation();
+        event.preventDefault();
+        moved = false;
+      }
+    }, true);
   }
 
   function createFloatingButton(app) {
@@ -387,6 +422,20 @@
       openChatbotWithPrefill(msg.appId, msg.value, msg.mode);
       sendResponse({ success: true }); return true;
     }
+    if (msg.action === 'toggleChatbot') {
+      if (currentApp) {
+        toggleChatbot(currentApp);
+      } else {
+        Promise.all([getApps(), getSites(), getSettings()]).then(function (results) {
+          var apps = results[0], sites = results[1], settings = results[2];
+          var matched = resolveAppForCurrentUrl(apps, sites, settings);
+          if (matched) {
+            toggleChatbot(matched);
+          }
+        });
+      }
+      sendResponse({ success: true }); return true;
+    }
     if (msg.action === 'switchApp') {
       refreshUI();
       sendResponse({ success: true }); return true;
@@ -405,6 +454,16 @@
 
     if (matched) createFloatingButton(matched);
     chrome.runtime.onMessage.addListener(handleMessage);
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        var wrapper = document.getElementById('dify-chatbot-bubble-window');
+        if (wrapper && wrapper.getAttribute('data-dify-visible') === 'true') {
+          hideAll();
+          if (displayDiv) displayDiv.innerHTML = OPEN_ICON;
+        }
+      }
+    });
 
     chrome.storage.local.onChanged.addListener(function (changes, areaName) {
       if (areaName === 'local' && changes['difyChatbotV2']) refreshUI();
