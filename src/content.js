@@ -109,13 +109,88 @@
     return true;
   }
 
+  function makeResizable(wrapper) {
+    var handles = [
+      { edge: 'nw', cursor: 'nwse-resize', style: 'top:0;left:0;width:12px;height:12px;' },
+      { edge: 'n',  cursor: 'ns-resize',   style: 'top:0;left:12px;right:12px;height:6px;' },
+      { edge: 'ne', cursor: 'nesw-resize', style: 'top:0;right:0;width:12px;height:12px;' },
+      { edge: 'w',  cursor: 'ew-resize',   style: 'top:12px;left:0;bottom:12px;width:6px;' },
+      { edge: 'sw', cursor: 'nesw-resize', style: 'bottom:0;left:0;width:14px;height:14px;' }
+    ];
+
+    handles.forEach(function (h) {
+      var handle = document.createElement('div');
+      handle.className = 'dify-resize-handle dify-resize-' + h.edge;
+      handle.style.cssText = 'position:absolute;z-index:2147483648;cursor:' + h.cursor + ';' + h.style;
+
+      if (h.edge === 'nw' || h.edge === 'sw' || h.edge === 'ne') {
+        var dot = document.createElement('div');
+        dot.style.cssText = 'position:absolute;width:6px;height:6px;background:rgba(100,100,100,0.5);border-radius:50%;pointer-events:none;';
+        if (h.edge === 'nw') { dot.style.top = '3px'; dot.style.left = '3px'; }
+        else if (h.edge === 'sw') { dot.style.bottom = '3px'; dot.style.left = '3px'; }
+        else if (h.edge === 'ne') { dot.style.top = '3px'; dot.style.right = '3px'; }
+        handle.appendChild(dot);
+      }
+
+      handle.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        var rect = wrapper.getBoundingClientRect();
+        var startX = e.clientX;
+        var startY = e.clientY;
+        var startWidth = rect.width;
+        var startHeight = rect.height;
+
+        function onMouseMove(ev) {
+          var dx = ev.clientX - startX;
+          var dy = ev.clientY - startY;
+
+          var newWidth = startWidth;
+          var newHeight = startHeight;
+
+          if (h.edge.indexOf('w') !== -1) {
+            newWidth = startWidth - dx;
+          }
+          if (h.edge.indexOf('n') !== -1) {
+            newHeight = startHeight - dy;
+          } else if (h.edge.indexOf('s') !== -1) {
+            newHeight = startHeight + dy;
+          }
+
+          var minW = 280, minH = 320;
+          var maxW = window.innerWidth - 24;
+          var maxH = window.innerHeight - 30;
+
+          newWidth = Math.max(minW, Math.min(newWidth, maxW));
+          newHeight = Math.max(minH, Math.min(newHeight, maxH));
+
+          wrapper.style.width = newWidth + 'px';
+          wrapper.style.height = newHeight + 'px';
+        }
+
+        function onMouseUp() {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+
+      wrapper.appendChild(handle);
+    });
+  }
+
   function createWrapperElement() {
     var oldWrapper = document.getElementById('dify-chatbot-bubble-window');
     if (oldWrapper) oldWrapper.remove();
     var wrapper = document.createElement('div');
     wrapper.id = 'dify-chatbot-bubble-window';
     wrapper.setAttribute('data-dify-visible', 'true');
-    wrapper.style.cssText = 'position:fixed;bottom:6.7rem;right:1rem;width:min(30rem,calc(100vw - 2rem));height:min(48rem,calc(100vh - 8.5rem));z-index:2147483647;border-radius:0.75rem;box-shadow:rgba(150,150,150,0.2) 0px 10px 30px 0px,rgba(150,150,150,0.2) 0px 0px 0px 1px;overflow:hidden;resize:both;direction:rtl;min-width:18rem;min-height:22rem;max-width:calc(100vw - 2rem);max-height:calc(100vh - 6.7rem);';
+    wrapper.style.cssText = 'position:fixed;bottom:6.7rem;right:1rem;width:min(30rem,calc(100vw - 2rem));height:min(48rem,calc(100vh - 8.5rem));z-index:2147483647;border-radius:0.75rem;box-shadow:rgba(150,150,150,0.2) 0px 10px 30px 0px,rgba(150,150,150,0.2) 0px 0px 0px 1px;overflow:hidden;min-width:18rem;min-height:22rem;max-width:calc(100vw - 2rem);max-height:calc(100vh - 6.7rem);direction:ltr;box-sizing:border-box;';
+    makeResizable(wrapper);
     return wrapper;
   }
 

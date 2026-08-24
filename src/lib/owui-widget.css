@@ -236,13 +236,44 @@
   animation: owuiFadeIn 0.25s ease-out;
 }
 
+.owui-message-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
 .owui-message-role {
   font-size: 11px;
   font-weight: 600;
-  margin-bottom: 4px;
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+.owui-msg-copy-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: #9ca3af;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+.owui-message:hover .owui-msg-copy-btn {
+  opacity: 1;
+}
+.owui-msg-copy-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+.owui-msg-copy-btn.owui-copied {
+  color: #16a34a !important;
+  opacity: 1 !important;
 }
 
 .owui-message-content {
@@ -490,6 +521,13 @@ h5.owui-md-h { font-size: 12px; }
   }
   .owui-md-h {
     color: #cdd6f4;
+  }
+  .owui-msg-copy-btn:hover {
+    background: #313244;
+    color: #cdd6f4;
+  }
+  .owui-msg-copy-btn.owui-copied {
+    color: #a6e3a1 !important;
   }
 }
 

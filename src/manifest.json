@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Dify Chatbot",
-  "version": "2.2",
+  "version": "2.3",
   "description": "Inject Dify or Open WebUI chatbot on any pages with per-site configuration",
   "permissions": ["storage", "contextMenus", "scripting"],
   "host_permissions": ["<all_urls>"],

@@ -15,6 +15,9 @@
     this.activeChatId = null;
     this.isSending = false;
     this.activePort = null;
+    this.streamBuffer = '';
+    this.displayedLength = 0;
+    this.rafId = null;
     this.sidebarVisible = false;
 
     this.el = null;
@@ -34,6 +37,10 @@
   };
 
   OwuiChatWidget.prototype.destroy = function() {
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
     if (this.activePort) {
       try { this.activePort.disconnect(); } catch (e) {}
       this.activePort = null;
@@ -145,16 +152,75 @@
     });
 
     this.messagesEl.addEventListener('click', function(e) {
-      var copyBtn = e.target.closest('.' + CSS_PREFIX + 'code-copy-btn');
-      if (!copyBtn) return;
-      var codeEl = copyBtn.parentNode.querySelector('code');
-      if (!codeEl) return;
-      var textToCopy = codeEl.innerText || codeEl.textContent;
-      navigator.clipboard.writeText(textToCopy).then(function() {
-        copyBtn.textContent = 'Скопировано!';
-        setTimeout(function() { copyBtn.textContent = 'Копировать'; }, 2000);
-      });
+      var copyCodeBtn = e.target.closest('.' + CSS_PREFIX + 'code-copy-btn');
+      if (copyCodeBtn) {
+        var codeBlock = copyCodeBtn.closest('.' + CSS_PREFIX + 'code-block');
+        var codeEl = codeBlock ? codeBlock.querySelector('code') : null;
+        if (!codeEl) return;
+        var textToCopy = codeEl.innerText || codeEl.textContent;
+        self._copyToClipboard(textToCopy, function(success) {
+          if (success) {
+            var orig = copyCodeBtn.textContent;
+            copyCodeBtn.textContent = 'Скопировано!';
+            setTimeout(function() { copyCodeBtn.textContent = orig; }, 2000);
+          }
+        });
+        return;
+      }
+
+      var copyMsgBtn = e.target.closest('.' + CSS_PREFIX + 'msg-copy-btn');
+      if (copyMsgBtn) {
+        var msgEl = copyMsgBtn.closest('.' + CSS_PREFIX + 'message');
+        if (!msgEl) return;
+        var msgIndex = parseInt(msgEl.dataset.msgIndex, 10);
+        var chat = self._getActiveChat();
+        if (chat && chat.messages && chat.messages[msgIndex]) {
+          var rawContent = chat.messages[msgIndex].content;
+          self._copyToClipboard(rawContent, function(success) {
+            if (success) {
+              var origTitle = copyMsgBtn.getAttribute('title') || 'Копировать';
+              copyMsgBtn.setAttribute('title', 'Скопировано!');
+              copyMsgBtn.classList.add(CSS_PREFIX + 'copied');
+              setTimeout(function() {
+                copyMsgBtn.setAttribute('title', origTitle);
+                copyMsgBtn.classList.remove(CSS_PREFIX + 'copied');
+              }, 2000);
+            }
+          });
+        }
+        return;
+      }
     });
+  };
+
+  OwuiChatWidget.prototype._copyToClipboard = function(text, callback) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function() {
+        if (callback) callback(true);
+      }).catch(function() {
+        fallbackCopy();
+      });
+    } else {
+      fallbackCopy();
+    }
+
+    function fallbackCopy() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        var res = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (callback) callback(res);
+      } catch (err) {
+        if (callback) callback(false);
+      }
+    }
   };
 
   OwuiChatWidget.prototype._escapeHtml = function(str) {
@@ -319,6 +385,39 @@
     this._doSend(text);
   };
 
+  OwuiChatWidget.prototype._startSmoothRender = function() {
+    var self = this;
+    if (this.rafId) return;
+
+    function step() {
+      if (!self.isSending && self.displayedLength >= self.streamBuffer.length) {
+        self.rafId = null;
+        return;
+      }
+
+      var chat = self._getActiveChat();
+      if (!chat) {
+        self.rafId = null;
+        return;
+      }
+
+      var lastMsg = chat.messages[chat.messages.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant') {
+        var remaining = self.streamBuffer.length - self.displayedLength;
+        if (remaining > 0) {
+          var stepSize = Math.max(1, Math.ceil(remaining / 3));
+          self.displayedLength = Math.min(self.streamBuffer.length, self.displayedLength + stepSize);
+          lastMsg.content = self.streamBuffer.substring(0, self.displayedLength);
+          self._renderMessages();
+        }
+      }
+
+      self.rafId = requestAnimationFrame(step);
+    }
+
+    this.rafId = requestAnimationFrame(step);
+  };
+
   OwuiChatWidget.prototype._stopGeneration = function() {
     if (this.activePort) {
       try { this.activePort.disconnect(); } catch (e) {}
@@ -348,6 +447,8 @@
   OwuiChatWidget.prototype._doSend = function(text) {
     var self = this;
     this.isSending = true;
+    this.streamBuffer = '';
+    this.displayedLength = 0;
     this.textareaEl.value = '';
     this.textareaEl.style.height = 'auto';
     this._updateSendBtnState();
@@ -367,6 +468,7 @@
     chat.messages.push({ role: 'assistant', content: '' });
     this._saveState();
     this._renderMessages();
+    this._startSmoothRender();
 
     var apiMessages = [];
     for (var i = 0; i < chat.messages.length - 1; i++) {
@@ -381,13 +483,7 @@
 
     port.onMessage.addListener(function(msg) {
       if (msg.chunk) {
-        var updatedChat = self._getActiveChat();
-        if (!updatedChat) return;
-        var lastMsg = updatedChat.messages[updatedChat.messages.length - 1];
-        if (lastMsg && lastMsg.role === 'assistant') {
-          lastMsg.content += msg.chunk;
-          self._renderMessages();
-        }
+        self.streamBuffer += msg.chunk;
       } else if (msg.done) {
         self._finishStream(port);
       } else if (msg.error) {
@@ -423,6 +519,10 @@
       try { port.disconnect(); } catch(e) {}
       this.activePort = null;
     }
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
     this.isSending = false;
     this._updateSendBtnState();
     this.textareaEl.focus();
@@ -430,8 +530,13 @@
     var chat = this._getActiveChat();
     if (chat) {
       var lastMsg = chat.messages[chat.messages.length - 1];
-      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content) {
-        addMessageToChat(this.appId, this.hostname, chat.id, 'assistant', lastMsg.content);
+      if (lastMsg && lastMsg.role === 'assistant') {
+        if (this.streamBuffer) {
+          lastMsg.content = this.streamBuffer;
+        }
+        if (lastMsg.content) {
+          addMessageToChat(this.appId, this.hostname, chat.id, 'assistant', lastMsg.content);
+        }
       }
       chat.updatedAt = Date.now();
       this._saveState();
@@ -461,8 +566,16 @@
           ? this._escapeHtml(m.content).replace(/\n/g, '<br>')
           : this._renderMarkdown(m.content);
         var isLastAsst = this.isSending && i === chat.messages.length - 1 && m.role === 'assistant';
-        html += '<div class="' + CSS_PREFIX + 'message ' + CSS_PREFIX + 'message-' + roleClass + '">' +
-          '<div class="' + CSS_PREFIX + 'message-role">' + (m.role === 'user' ? 'Вы' : 'AI') + '</div>' +
+        html += '<div class="' + CSS_PREFIX + 'message ' + CSS_PREFIX + 'message-' + roleClass + '" data-msg-index="' + i + '">' +
+          '<div class="' + CSS_PREFIX + 'message-header">' +
+            '<span class="' + CSS_PREFIX + 'message-role">' + (m.role === 'user' ? 'Вы' : 'AI') + '</span>' +
+            (!isLastAsst && m.content ? '<button type="button" class="' + CSS_PREFIX + 'msg-copy-btn" title="Копировать ответ">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>' +
+                '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>' +
+              '</svg>' +
+            '</button>' : '') +
+          '</div>' +
           '<div class="' + CSS_PREFIX + 'message-content">' + renderedContent + (isLastAsst ? '<span class="' + CSS_PREFIX + 'cursor"></span>' : '') + '</div>' +
         '</div>';
       }
