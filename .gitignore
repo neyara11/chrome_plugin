@@ -1,0 +1,9 @@
+# Build artifacts — publish via GitHub Releases instead of git
+*.zip
+*.crx
+!original/**
+
+# Local tooling/state
+.kilo/
+.DS_Store
+Thumbs.db
