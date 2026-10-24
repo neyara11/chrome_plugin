@@ -1,5 +1,7 @@
 # Dify ChatBot — Chrome расширение
 
+**Язык: Русский | [English](README_EN.md)**
+
 Встраивает чат-ботов [Dify](https://dify.ai/) и [Open WebUI](https://openwebui.com/) на любые веб-страницы через плавающую кнопку.
 
 ## Возможности
